@@ -11,11 +11,13 @@
       <div class="w-[300px] h-full bg-gray-50 border-r overflow-y-auto">
         <div class="p-4">
           <h2 class="text-lg font-medium mb-4">地圖控制</h2>
-          
+
           <!-- 座標輸入 -->
           <div class="space-y-3">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">緯度</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >緯度</label
+              >
               <input
                 v-model.number="coordinates.lat"
                 type="number"
@@ -25,7 +27,9 @@
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">經度</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >經度</label
+              >
               <input
                 v-model.number="coordinates.lng"
                 type="number"
@@ -47,9 +51,13 @@
             <h3 class="text-sm font-medium text-gray-700 mb-2">地圖資訊</h3>
             <div class="text-sm text-gray-600 space-y-1">
               <p>縮放等級: {{ mapZoom }}</p>
-              <p>中心點: {{ mapCenter.lat.toFixed(4) }}, {{ mapCenter.lng.toFixed(4) }}</p>
+              <p>
+                中心點: {{ mapCenter.lat.toFixed(4) }},
+                {{ mapCenter.lng.toFixed(4) }}
+              </p>
               <p v-if="clickedLocation">
-                點擊位置: {{ clickedLocation.lat.toFixed(4) }}, {{ clickedLocation.lng.toFixed(4) }}
+                點擊位置: {{ clickedLocation.lat.toFixed(4) }},
+                {{ clickedLocation.lng.toFixed(4) }}
               </p>
             </div>
           </div>
@@ -71,54 +79,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import LeafletMap from './components/LeafletMap.vue'
-import type L from 'leaflet'
+import { ref, reactive } from "vue";
+import LeafletMap from "./components/LeafletMap.vue";
+import type L from "leaflet";
+import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
 
-const mapComponent = ref()
-let map: L.Map | null = null
+let map: L.Map | null = null;
+const mapComponent = ref();
+const mapZoom = ref(13);
 
 // 響應式資料
 const coordinates = reactive({
-  lat: 25.0330,
-  lng: 121.5654
-})
+  lat: 25.033,
+  lng: 121.5654,
+});
 
-const mapZoom = ref(13)
 const mapCenter = reactive({
-  lat: 25.0330,
-  lng: 121.5654
-})
-const clickedLocation = ref<{lat: number, lng: number} | null>(null)
+  lat: 25.033,
+  lng: 121.5654,
+});
+const clickedLocation = ref<{ lat: number; lng: number } | null>(null);
 
 // 地圖事件處理
 const onMapReady = (mapInstance: L.Map) => {
-  map = mapInstance
-  
+  map = mapInstance;
+
   // 監聽地圖移動和縮放事件
-  map.on('moveend zoomend', () => {
+  map.on("moveend zoomend", () => {
     if (map) {
-      const center = map.getCenter()
-      mapCenter.lat = center.lat
-      mapCenter.lng = center.lng
-      mapZoom.value = map.getZoom()
+      const center = map.getCenter();
+      mapCenter.lat = center.lat;
+      mapCenter.lng = center.lng;
+      mapZoom.value = map.getZoom();
     }
-  })
-}
+  });
+};
 
 const onMapClick = (event: L.LeafletMouseEvent) => {
   clickedLocation.value = {
     lat: event.latlng.lat,
-    lng: event.latlng.lng
-  }
-  console.log('地圖點擊:', event.latlng)
-}
+    lng: event.latlng.lng,
+  };
+
+  useFetchNearbyRenewal(event.latlng.lat, event.latlng.lng);
+};
 
 const goToLocation = () => {
   if (mapComponent.value) {
-    mapComponent.value.flyTo(coordinates.lat, coordinates.lng, 15)
+    mapComponent.value.flyTo(coordinates.lat, coordinates.lng, 15);
   }
-}
+};
 </script>
 
 <style scoped></style>
