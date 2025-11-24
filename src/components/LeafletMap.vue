@@ -75,6 +75,9 @@ onUnmounted(() => {
   }
 })
 
+// 儲存 polygon 圖層的參考
+const polygonLayers = ref<L.Polygon[]>([])
+
 // 導出地圖實例供外部使用
 defineExpose({
   getMap: () => map,
@@ -86,6 +89,72 @@ defineExpose({
   flyTo: (lat: number, lng: number, zoom?: number) => {
     if (map) {
       map.flyTo([lat, lng], zoom || map.getZoom())
+    }
+  },
+  // 添加 Polygon 到地圖
+  addPolygon: (coordinates: [number, number][] | [number, number][][], options?: L.PolylineOptions) => {
+    if (map) {
+      const defaultOptions: L.PolylineOptions = {
+        color: '#3b82f6',      // 藍色邊框
+        fillColor: '#60a5fa',  // 淺藍色填充
+        fillOpacity: 0.3,      // 填充透明度
+        weight: 2,             // 邊框粗細
+        ...options
+      }
+      
+      const polygon = L.polygon(coordinates, defaultOptions).addTo(map)
+      polygonLayers.value.push(polygon)
+      
+      // 調整地圖視野以顯示整個 polygon
+      map.fitBounds(polygon.getBounds(), { padding: [50, 50] })
+      
+      return polygon
+    }
+  },
+  // 添加多個 Polygons (GeoJSON 格式)
+  addGeoJsonPolygon: (geoJsonData: any, options?: L.PolylineOptions) => {
+    if (map) {
+      const defaultOptions: L.PolylineOptions = {
+        color: '#3b82f6',
+        fillColor: '#60a5fa',
+        fillOpacity: 0.3,
+        weight: 2,
+        ...options
+      }
+      
+      const geoJsonLayer = L.geoJSON(geoJsonData, {
+        style: defaultOptions,
+        onEachFeature: (feature, layer) => {
+          // 可以在這裡添加 popup 或其他互動
+          if (feature.properties && feature.properties.name) {
+            layer.bindPopup(feature.properties.name)
+          }
+        }
+      }).addTo(map)
+      
+      // 調整地圖視野
+      map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50] })
+      
+      return geoJsonLayer
+    }
+  },
+  // 清除所有 Polygons
+  clearPolygons: () => {
+    if (map) {
+      polygonLayers.value.forEach(polygon => {
+        map?.removeLayer(polygon)
+      })
+      polygonLayers.value = []
+    }
+  },
+  // 清除特定 Polygon
+  removePolygon: (polygon: L.Polygon) => {
+    if (map) {
+      map.removeLayer(polygon)
+      const index = polygonLayers.value.indexOf(polygon)
+      if (index > -1) {
+        polygonLayers.value.splice(index, 1)
+      }
     }
   }
 })

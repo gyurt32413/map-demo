@@ -55,7 +55,8 @@
                 :key="renewal.id"
               >
                 <li
-                  class="mb-3 font-semibold flex justify-between items-center px-2 py-4 bg-white border border-gray-200 rounded-md shadow-sm"
+                  class="mb-3 cursor-pointer font-semibold flex justify-between items-center px-2 py-4 bg-white border border-gray-200 rounded-md shadow-sm"
+                  @click="getRenewalPolygon(renewal)"
                 >
                   <div class="text-gray-800 text-[18px]">
                     {{ renewal.stop_name }}
@@ -102,6 +103,7 @@ import { ref, reactive, watch } from "vue";
 import LeafletMap from "./components/LeafletMap.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
+import { useFetchRenewalPolygon } from "./api/useFetchRenewalPolygon";
 
 let map: L.Map | null = null;
 const mapComponent = ref();
@@ -155,9 +157,9 @@ const goToLocation = () => {
   }
 };
 
-// === 附近都更資料
-const nearbyRenewals = ref<ResultData[]>([]);
-const setNearByRenewals = (data: ResultData[]) => {
+// === 附近都更資料 ===
+const nearbyRenewals = ref<NearbyRenewalResult[]>([]);
+const setNearByRenewals = (data: NearbyRenewalResult[]) => {
   nearbyRenewals.value = data;
 };
 
@@ -167,6 +169,29 @@ const fetchNearbyRenewals = async (lat: number, lng: number) => {
     setNearByRenewals(response.result);
   } else {
     nearbyRenewals.value = [];
+  }
+};
+// === 附近都更資料 end ===
+
+// === 取得都更案範圍多邊形 ===
+const getRenewalPolygon = async (renewal: NearbyRenewalResult) => {
+  const response = await useFetchRenewalPolygon("tucheng.json");
+
+  if (response?.result && mapComponent.value) {
+    console.log("Polygon response:", response.result);
+
+    // 清除之前的 polygons
+    mapComponent.value.clearPolygons();
+
+    // 將 response.result 轉換為 any 來處理未知的結構
+    const polygonData = response.result as any;
+
+    mapComponent.value.addGeoJsonPolygon(polygonData, {
+      color: "#3b82f6", // 藍色邊框
+      fillColor: "#60a5fa", // 淺藍色填充
+      fillOpacity: 0.4,
+      weight: 3,
+    });
   }
 };
 
