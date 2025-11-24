@@ -46,10 +46,29 @@
             </button>
           </div>
 
-          <!-- 地圖資訊 -->
+          <!-- 附近的都更案 -->
           <div class="mt-6 pt-4 border-t">
-            <h3 class="text-sm font-medium text-gray-700 mb-2">地圖資訊</h3>
-            <div class="text-sm text-gray-600 space-y-1">
+            <h3 class="font-medium text-gray-700 mb-2">地圖資訊</h3>
+            <ul class="custom-scrollbar max-h-[600px] pr-1 overflow-y-auto">
+              <template
+                v-for="(renewal, index) in nearbyRenewals"
+                :key="renewal.id"
+              >
+                <li
+                  class="mb-3 font-semibold flex justify-between items-center px-2 py-4 bg-white border border-gray-200 rounded-md shadow-sm"
+                >
+                  <div class="text-gray-800 text-[18px]">
+                    {{ renewal.stop_name }}
+                  </div>
+
+                  <div class="text-sm text-blue-400 space-x-1">
+                    <span class="text-[30px]">{{ renewal.distance }}</span>
+                    <span>km</span>
+                  </div>
+                </li>
+              </template>
+            </ul>
+            <!-- <div class="text-sm text-gray-600 space-y-1">
               <p>縮放等級: {{ mapZoom }}</p>
               <p>
                 中心點: {{ mapCenter.lat.toFixed(4) }},
@@ -59,7 +78,7 @@
                 點擊位置: {{ clickedLocation.lat.toFixed(4) }},
                 {{ clickedLocation.lng.toFixed(4) }}
               </p>
-            </div>
+            </div> -->
           </div>
         </div>
       </div>
@@ -79,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from "vue";
+import { ref, reactive, watch } from "vue";
 import LeafletMap from "./components/LeafletMap.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
@@ -98,7 +117,17 @@ const mapCenter = reactive({
   lat: 25.033,
   lng: 121.5654,
 });
+
+const setMapCenter = (lat: number, lng: number) => {
+  mapCenter.lat = lat;
+  mapCenter.lng = lng;
+};
+
 const clickedLocation = ref<{ lat: number; lng: number } | null>(null);
+
+const setClickedLocation = (lat: number, lng: number) => {
+  clickedLocation.value = { lat, lng };
+};
 
 // 地圖事件處理
 const onMapReady = (mapInstance: L.Map) => {
@@ -108,20 +137,16 @@ const onMapReady = (mapInstance: L.Map) => {
   map.on("moveend zoomend", () => {
     if (map) {
       const center = map.getCenter();
-      mapCenter.lat = center.lat;
-      mapCenter.lng = center.lng;
+      setMapCenter(center.lat, center.lng);
       mapZoom.value = map.getZoom();
     }
   });
 };
 
 const onMapClick = (event: L.LeafletMouseEvent) => {
-  clickedLocation.value = {
-    lat: event.latlng.lat,
-    lng: event.latlng.lng,
-  };
+  setClickedLocation(event.latlng.lat, event.latlng.lng);
 
-  useFetchNearbyRenewal(event.latlng.lat, event.latlng.lng);
+  fetchNearbyRenewals(event.latlng.lat, event.latlng.lng);
 };
 
 const goToLocation = () => {
@@ -129,6 +154,51 @@ const goToLocation = () => {
     mapComponent.value.flyTo(coordinates.lat, coordinates.lng, 15);
   }
 };
+
+// === 附近都更資料
+const nearbyRenewals = ref<ResultData[]>([]);
+const setNearByRenewals = (data: ResultData[]) => {
+  nearbyRenewals.value = data;
+};
+
+const fetchNearbyRenewals = async (lat: number, lng: number) => {
+  const response = await useFetchNearbyRenewal(lat, lng);
+  if (response?.result) {
+    setNearByRenewals(response.result);
+  } else {
+    nearbyRenewals.value = [];
+  }
+};
+
+watch(
+  mapCenter,
+  (newCenter) => {
+    fetchNearbyRenewals(newCenter.lat, newCenter.lng);
+  },
+  {
+    immediate: true,
+  }
+);
 </script>
 
-<style scoped></style>
+<style lang="scss" scoped>
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #5784ba transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: #4b74a5;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}
+</style>

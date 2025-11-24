@@ -32,6 +32,8 @@ button {
   font: inherit;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   font: inherit;
 }

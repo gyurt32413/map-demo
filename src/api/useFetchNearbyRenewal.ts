@@ -1,21 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-interface ResponseData {
-  result: ResultData[];
-  tod: boolean;
-}
-
-interface ResultData {
-  distance: number;
-  id: number;
-  is_tod: number;
-  latitude: number;
-  longitude: number;
-  name: string;
-  radius: number;
-  stop_name: string;
-}
-
 /**
  * 取得附近的都更地點 API
  * @param lat number 緯度
