@@ -93,7 +93,7 @@
           @map-ready="onMapReady"
           @click="onMapClick"
         />
-        
+
         <!-- 取得當前位置按鈕（地圖右下角） -->
         <button
           @click="getCurrentLocation"
@@ -101,16 +101,8 @@
           :title="locationError || '取得當前位置'"
           class="absolute bottom-6 right-6 size-10 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 z-[1000]"
         >
-          <svg v-if="isGettingLocation" class="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
           <!-- 瞄準器圖標 -->
-          <svg v-else class="h-8 w-8" :class="locationError ? 'text-red-500' : 'text-gray-700'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <circle cx="12" cy="12" r="8"/>
-            <circle cx="12" cy="12" r="2" fill="currentColor"/>
-            <path stroke-linecap="round" d="M12 3v2m0 14v2M3 12h2m14 0h2"/>
-          </svg>
+          <img src="./assets/locate_icon.svg" alt="Locate Icon" />
         </button>
       </div>
     </main>
@@ -123,6 +115,7 @@ import LeafletMap from "./components/LeafletMap.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
 import { useFetchRenewalPolygon } from "./api/useFetchRenewalPolygon";
+import { debounce } from "./utils/functionUtils";
 
 let map: L.Map | null = null;
 const mapComponent = ref();
@@ -184,7 +177,7 @@ const goToLocation = () => {
 // === 取得當前位置功能 ===
 const getCurrentLocation = () => {
   if (!navigator.geolocation) {
-    locationError.value = '您的瀏覽器不支援定位功能';
+    locationError.value = "您的瀏覽器不支援定位功能";
     return;
   }
 
@@ -194,56 +187,60 @@ const getCurrentLocation = () => {
   navigator.geolocation.getCurrentPosition(
     (position) => {
       const { latitude, longitude } = position.coords;
-      
+
       // 更新座標
       coordinates.lat = latitude;
       coordinates.lng = longitude;
-      
+
       // 移除舊的標記
       if (userLocationMarker && map) {
         map.removeLayer(userLocationMarker);
       }
-      
+
       // 添加當前位置標記
       if (mapComponent.value) {
         userLocationMarker = mapComponent.value.addMarker(latitude, longitude);
-        
+
         if (userLocationMarker) {
-          userLocationMarker.bindPopup(
-            `<b>您的位置</b><br>緯度: ${latitude.toFixed(6)}<br>經度: ${longitude.toFixed(6)}`
-          ).openPopup();
+          userLocationMarker
+            .bindPopup(
+              `<b>您的位置</b><br>緯度: ${latitude.toFixed(
+                6
+              )}<br>經度: ${longitude.toFixed(6)}`
+            )
+            .openPopup();
         }
-        
+
         // 飛到當前位置
         mapComponent.value.flyTo(latitude, longitude, 15);
       }
-      
+
       isGettingLocation.value = false;
-      
+
       // 查詢附近的都更案
       fetchNearbyRenewals(latitude, longitude);
     },
     (error) => {
       isGettingLocation.value = false;
-      
+
       switch (error.code) {
         case error.PERMISSION_DENIED:
-          locationError.value = '您拒絕了位置存取權限';
+          locationError.value = "您拒絕了位置存取權限";
           break;
         case error.POSITION_UNAVAILABLE:
-          locationError.value = '無法取得位置資訊';
+          locationError.value = "無法取得位置資訊";
           break;
         case error.TIMEOUT:
-          locationError.value = '定位請求逾時';
+          locationError.value = "定位請求逾時";
           break;
         default:
-          locationError.value = '發生未知錯誤';
+          locationError.value = "發生未知錯誤";
       }
     },
     {
       enableHighAccuracy: true,
       timeout: 10000,
-      maximumAge: 0
+      maximumAge: 0,
     }
   );
 };
@@ -263,6 +260,19 @@ const fetchNearbyRenewals = async (lat: number, lng: number) => {
     nearbyRenewals.value = [];
   }
 };
+
+// 使用 debounce 包裝，避免地圖移動時頻繁呼叫 API
+const fetchNearbyRenewalsWithDebounce = debounce(fetchNearbyRenewals, 500);
+
+watch(
+  mapCenter,
+  (newCenter) => {
+    fetchNearbyRenewalsWithDebounce(newCenter.lat, newCenter.lng);
+  },
+  {
+    immediate: true,
+  }
+);
 // === 附近都更資料 end ===
 
 // === 取得都更案範圍多邊形 ===
@@ -286,16 +296,6 @@ const getRenewalPolygon = async (renewal: NearbyRenewalResult) => {
     });
   }
 };
-
-watch(
-  mapCenter,
-  (newCenter) => {
-    fetchNearbyRenewals(newCenter.lat, newCenter.lng);
-  },
-  {
-    immediate: true,
-  }
-);
 </script>
 
 <style lang="scss" scoped>
