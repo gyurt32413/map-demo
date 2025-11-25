@@ -17,3 +17,7 @@ export function debounce<T extends (...args: any[]) => any>(
     }, wait);
   };
 }
+
+export function useCloneDeep<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj)) as T;
+}

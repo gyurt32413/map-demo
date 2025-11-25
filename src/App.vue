@@ -10,40 +10,21 @@
       <!-- Sidebar -->
       <div class="w-[300px] h-full bg-gray-50 border-r overflow-y-auto">
         <div class="p-4">
-          <h2 class="text-lg font-medium mb-4">地圖控制</h2>
+          <h2 class="text-lg font-semibold mb-4">搜尋地址</h2>
 
           <!-- 座標輸入 -->
           <div class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >緯度</label
-              >
+            <div class="flex items-center space-x-2">
               <input
-                v-model.number="coordinates.lat"
-                type="number"
-                step="0.000001"
+                type="text"
+                placeholder="請輸入你要查詢的地址"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="25.0330"
+                v-model="searchInput"
               />
+              <button @click="searchAddress">
+                <img src="./assets/search_icon.svg" alt="search-icon" />
+              </button>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >經度</label
-              >
-              <input
-                v-model.number="coordinates.lng"
-                type="number"
-                step="0.000001"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="121.5654"
-              />
-            </div>
-            <button
-              @click="goToLocation"
-              class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-            >
-              前往位置
-            </button>
           </div>
 
           <!-- 附近的都更案 -->
@@ -51,12 +32,12 @@
             <h3 class="font-medium text-gray-700 mb-2">地圖資訊</h3>
             <ul class="custom-scrollbar max-h-[600px] pr-1 overflow-y-auto">
               <template
-                v-for="(renewal, index) in nearbyRenewals"
+                v-for="(renewal, index) in filteredRenewals"
                 :key="renewal.id"
               >
                 <li
                   class="mb-3 cursor-pointer font-semibold flex justify-between items-center px-2 py-4 bg-white border border-gray-200 rounded-md shadow-sm"
-                  @click="getRenewalPolygon(renewal)"
+                  @click="getRenewalInfo(renewal)"
                 >
                   <div class="text-gray-800 text-[18px]">
                     {{ renewal.stop_name }}
@@ -115,18 +96,18 @@ import LeafletMap from "./components/LeafletMap.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
 import { useFetchRenewalPolygon } from "./api/useFetchRenewalPolygon";
-import { debounce } from "./utils/functionUtils";
+import { debounce, useCloneDeep } from "./utils/functionUtils";
 
 let map: L.Map | null = null;
-const mapComponent = ref();
-const mapZoom = ref(13);
-
-// 當前位置相關狀態
-const isGettingLocation = ref(false);
-const locationError = ref<string | null>(null);
 let userLocationMarker: L.Marker | null = null;
 
 // 響應式資料
+const mapComponent = ref();
+const mapZoom = ref(13);
+const isGettingLocation = ref(false);
+const locationError = ref<string | null>(null);
+const searchInput = ref("");
+
 const coordinates = reactive({
   lat: 25.033,
   lng: 121.5654,
@@ -160,6 +141,9 @@ const onMapReady = (mapInstance: L.Map) => {
       mapZoom.value = map.getZoom();
     }
   });
+
+  // 取得都更案範圍多邊形
+  getRenewalPolygon();
 };
 
 const onMapClick = (event: L.LeafletMouseEvent) => {
@@ -172,6 +156,10 @@ const goToLocation = () => {
   if (mapComponent.value) {
     mapComponent.value.flyTo(coordinates.lat, coordinates.lng, 15);
   }
+};
+
+const getRenewalInfo = (renewal: NearbyRenewalResult) => {
+  console.log("Selected renewal info:", renewal);
 };
 
 // === 取得當前位置功能 ===
@@ -276,7 +264,7 @@ watch(
 // === 附近都更資料 end ===
 
 // === 取得都更案範圍多邊形 ===
-const getRenewalPolygon = async (renewal: NearbyRenewalResult) => {
+const getRenewalPolygon = async () => {
   const response = await useFetchRenewalPolygon("tucheng.json");
 
   if (response?.result && mapComponent.value) {
@@ -296,6 +284,32 @@ const getRenewalPolygon = async (renewal: NearbyRenewalResult) => {
     });
   }
 };
+
+// === 搜尋地址 ===
+const filteredRenewals = ref<NearbyRenewalResult[]>([]);
+
+const searchAddress = () => {
+  const trimmedInput = searchInput.value.trim();
+
+  if (!trimmedInput) {
+    return;
+  }
+
+  filteredRenewals.value = nearbyRenewals.value.filter((renewal) =>
+    renewal.stop_name.includes(trimmedInput)
+  );
+};
+
+watch(
+  nearbyRenewals,
+  (newRenewals) => {
+    // 當 nearbyRenewals 更新時，同步更新 filteredRenewals
+    filteredRenewals.value = useCloneDeep(newRenewals);
+  },
+  {
+    immediate: true,
+  }
+);
 </script>
 
 <style lang="scss" scoped>
