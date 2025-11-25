@@ -3,6 +3,14 @@
     <!-- Nav -->
     <nav class="h-14 bg-gray-100 flex items-center px-4 shadow-sm border-b">
       <h1 class="text-xl font-semibold text-gray-800">地圖示範</h1>
+
+      <!-- 登入 -->
+      <div class="ml-auto">
+        <button class="text-sm text-blue-500 font-semibold hover:underline">
+          登入
+        </button>
+        <div id="google-login"></div>
+      </div>
     </nav>
 
     <!-- Main -->
@@ -310,6 +318,30 @@ watch(
     immediate: true,
   }
 );
+
+// === 第三方登入 ===
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+window.onload = () => {
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+  });
+
+  google.accounts.id.renderButton(document.getElementById("google-login"), {
+    theme: "outline",
+    size: "large",
+  });
+};
+
+function handleGoogleCredential(response) {
+  // 這裡會拿到 JWT (id_token)
+  const idToken = response.credential;
+  console.log("Google id_token:", idToken);
+
+  // 送給後端做 verify
+  // fetch("/api/google-login", { method: "POST", body: idToken });
+}
 </script>
 
 <style lang="scss" scoped>
