@@ -5,10 +5,10 @@
       <h1 class="text-xl font-semibold text-gray-800">地圖示範</h1>
 
       <!-- 登入 -->
-      <div class="ml-auto">
-        <button class="text-sm text-blue-500 font-semibold hover:underline">
-          登入
-        </button>
+      <div class="ml-auto flex items-center space-x-2">
+        <span class="text-sm text-blue-500 font-semibold ">
+          登入：
+        </span>
         <div id="google-login"></div>
       </div>
     </nav>
@@ -321,26 +321,63 @@ watch(
 
 // === 第三方登入 ===
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 window.onload = () => {
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleGoogleCredential,
-  });
+  if (typeof google !== "undefined" && GOOGLE_CLIENT_ID) {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential,
+    });
 
-  google.accounts.id.renderButton(document.getElementById("google-login"), {
-    theme: "outline",
-    size: "large",
-  });
+    const buttonDiv = document.getElementById("google-login");
+    if (buttonDiv) {
+      google.accounts.id.renderButton(buttonDiv, {
+        theme: "filled_blue",
+        size: "medium",
+        type: "icon",
+      });
+    }
+  } else {
+    console.error("Google SDK 未載入或 Client ID 未設定");
+  }
 };
 
-function handleGoogleCredential(response) {
-  // 這裡會拿到 JWT (id_token)
+async function handleGoogleCredential(response: any) {
   const idToken = response.credential;
-  console.log("Google id_token:", idToken);
+  console.log("收到 Google token，準備驗證...");
 
-  // 送給後端做 verify
-  // fetch("/api/google-login", { method: "POST", body: idToken });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google-login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ credential: idToken }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      console.log("✅ 登入成功:", data.user);
+
+      // 儲存 JWT token
+      localStorage.setItem("auth_token", data.token);
+
+      // 更新 UI 狀態（可以建立 user state）
+      alert(`歡迎，${data.user.name}！`);
+
+      // 重新整理或更新 UI
+      // location.reload();
+    } else {
+      console.error("❌ 登入失敗:", data.error);
+      alert("登入失敗，請重試");
+    }
+  } catch (error) {
+    console.error("❌ 網路錯誤:", error);
+    alert("連線失敗，請檢查後端伺服器是否運行");
+  }
 }
 </script>
 
