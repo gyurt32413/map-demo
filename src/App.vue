@@ -5,11 +5,33 @@
       <h1 class="text-xl font-semibold text-gray-800">地圖示範</h1>
 
       <!-- 登入 -->
-      <div class="ml-auto flex items-center space-x-2">
-        <span class="text-sm text-blue-500 font-semibold ">
-          登入：
-        </span>
-        <div id="google-login"></div>
+      <div class="ml-auto flex items-center space-x-4">
+        <template v-if="isEmpty(userInfo)">
+          <span class="text-sm text-blue-500 font-semibold"> 登入： </span>
+          <div id="google-login"></div>
+        </template>
+
+        <template v-else>
+          <div class="flex items-center space-x-1">
+            <span>HI！{{ userInfo.name }}</span>
+            <div
+              v-if="userPictureError"
+              class="size-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold"
+              :title="userInfo.name"
+            >
+              {{ getInitials(userInfo.name) }}
+            </div>
+            <img
+              v-else
+              class="size-10 rounded-full"
+              :src="userInfo.picture"
+              alt="user-picture"
+              @error="userPictureError = true"
+            />
+          </div>
+
+          <button>登出</button>
+        </template>
       </div>
     </nav>
 
@@ -104,7 +126,7 @@ import LeafletMap from "./components/LeafletMap.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
 import { useFetchRenewalPolygon } from "./api/useFetchRenewalPolygon";
-import { debounce, useCloneDeep } from "./utils/functionUtils";
+import { debounce, useCloneDeep, isEmpty } from "./utils/functionUtils";
 
 let map: L.Map | null = null;
 let userLocationMarker: L.Marker | null = null;
@@ -324,6 +346,21 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
+const userInfo = ref<any>(null);
+const userPictureError = ref(false);
+
+// 取得使用者姓名首字母
+const getInitials = (name: string): string => {
+  if (!name) return "U";
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0]?.[0] || "";
+    const last = parts[parts.length - 1]?.[0] || "";
+    return (first + last).toUpperCase() || "U";
+  }
+  return parts[0]?.[0]?.toUpperCase() || "U";
+};
+
 window.onload = () => {
   if (typeof google !== "undefined" && GOOGLE_CLIENT_ID) {
     google.accounts.id.initialize({
@@ -364,6 +401,7 @@ async function handleGoogleCredential(response: any) {
 
       // 儲存 JWT token
       localStorage.setItem("auth_token", data.token);
+      userInfo.value = data.user;
 
       // 更新 UI 狀態（可以建立 user state）
       alert(`歡迎，${data.user.name}！`);
