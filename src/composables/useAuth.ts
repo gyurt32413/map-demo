@@ -242,17 +242,26 @@ export function useAuth(
     showAlert("您已成功登出", "success", "登出成功");
   }
 
-  // 初始化
-  function initAuth() {
-    // 初始化 Google SDK
+  // 初始化 Google SDK (等待載入完成)
+  function initGoogleSDK() {
     if (typeof google !== "undefined" && GOOGLE_CLIENT_ID) {
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleGoogleCredential,
       });
+      console.log("✅ Google SDK 初始化完成");
+    } else if (!GOOGLE_CLIENT_ID) {
+      console.error("❌ Google Client ID 未設定");
     } else {
-      console.error("Google SDK 未載入或 Client ID 未設定");
+      // Google SDK 還未載入,等待後重試
+      setTimeout(initGoogleSDK, 100);
     }
+  }
+
+  // 初始化
+  function initAuth() {
+    // 初始化 Google SDK (帶重試機制)
+    initGoogleSDK();
 
     // 初始化 Facebook SDK
     if (FACEBOOK_APP_ID) {
