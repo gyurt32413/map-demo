@@ -12,6 +12,9 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# 但保留生產環境範本 (不含敏感資訊)
+!.env.production
+
 # SSL 憑證
 cert/
 *.pem
