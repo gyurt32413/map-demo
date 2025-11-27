@@ -1,23 +1,6 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
-  "env": {
-    "VITE_GOOGLE_CLIENT_ID": "@vite_google_client_id",
-    "VITE_FACEBOOK_APP_ID": "@vite_facebook_app_id",
-    "VITE_API_BASE_URL": "@vite_api_base_url"
-  }
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install"
 }
