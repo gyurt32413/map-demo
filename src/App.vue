@@ -1,17 +1,24 @@
 <template>
   <div class="h-screen">
+    <!-- 自訂 Alert Modal -->
+    <AlertModal
+      :show="alertModal.show"
+      :type="alertModal.type"
+      :title="alertModal.title"
+      :message="alertModal.message"
+      @close="closeAlert"
+    />
+
+    <!-- 登入 Modal -->
+    <LoginModal :show="showLoginModal" @close="() => {}" />
+
     <!-- Nav -->
     <nav class="flex h-14 items-center border-b bg-gray-100 px-4 shadow-sm">
       <h1 class="text-xl font-semibold text-gray-800">地圖示範</h1>
 
-      <!-- 登入 -->
+      <!-- 使用者資訊 -->
       <div class="ml-auto flex items-center space-x-4">
-        <template v-if="isEmpty(userInfo)">
-          <span class="text-sm font-semibold text-blue-500"> 登入： </span>
-          <div id="google-login"></div>
-        </template>
-
-        <template v-else>
+        <template v-if="!isEmpty(userInfo)">
           <div class="flex items-center space-x-3">
             <!-- 使用者資訊 -->
             <div class="flex items-center space-x-2">
@@ -54,11 +61,22 @@
             </button>
           </div>
         </template>
+        <template v-else>
+          <button
+            @click="showLoginModal = true"
+            class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          >
+            登入
+          </button>
+        </template>
       </div>
     </nav>
 
     <!-- Main -->
-    <main class="flex h-[calc(100%-56px)] mobile:flex-col">
+    <main
+      v-if="!isEmpty(userInfo) && userInfo.facebookId"
+      class="flex h-[calc(100%-56px)] mobile:flex-col"
+    >
       <!-- Sidebar -->
       <div
         class="h-full w-[300px] mobile:h-1/2 border-r bg-gray-50 mobile:order-1 mobile:w-full"
@@ -134,16 +152,83 @@
         </button>
       </div>
     </main>
+
+    <!-- 未綁定 Facebook 時的提示 -->
+    <div
+      v-else-if="!isEmpty(userInfo) && !userInfo.facebookId"
+      class="flex h-[calc(100%-56px)] items-center justify-center bg-gray-50"
+    >
+      <div class="max-w-md text-center">
+        <svg
+          class="mx-auto mb-4 h-24 w-24 text-blue-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <h3 class="mb-2 text-xl font-semibold text-gray-700">
+          請先綁定 Facebook 帳號
+        </h3>
+        <p class="mb-4 text-gray-500">
+          為了確保您的帳號安全，請先綁定 Facebook 帳號以使用地圖功能。
+        </p>
+        <button
+          @click="bindFacebook"
+          :disabled="isBindingFacebook"
+          class="flex items-center justify-center gap-2 rounded-lg bg-[#1877F2] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#166FE5] disabled:cursor-not-allowed disabled:opacity-50 mx-auto"
+        >
+          <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+            <path
+              d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+            />
+          </svg>
+          {{ isBindingFacebook ? "綁定中..." : "綁定 Facebook" }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 未登入時的佔位內容 -->
+    <div
+      v-else
+      class="flex h-[calc(100%-56px)] items-center justify-center bg-gray-50"
+    >
+      <div class="text-center">
+        <svg
+          class="mx-auto mb-4 h-24 w-24 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+          />
+        </svg>
+        <h3 class="mb-2 text-xl font-semibold text-gray-700">請先登入</h3>
+        <p class="text-gray-500">使用 Google 帳號登入以繼續</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from "vue";
+import { ref, reactive, watch, onMounted } from "vue";
 import LeafletMap from "./components/LeafletMap.vue";
+import AlertModal from "./components/AlertModal.vue";
+import LoginModal from "./components/LoginModal.vue";
 import type L from "leaflet";
 import { useFetchNearbyRenewal } from "./api/useFetchNearbyRenewal";
 import { useFetchRenewalPolygon } from "./api/useFetchRenewalPolygon";
 import { debounce, useCloneDeep, isEmpty } from "./utils/functionUtils";
+import Cookies from "js-cookie";
 
 let map: L.Map | null = null;
 let userLocationMarker: L.Marker | null = null;
@@ -447,6 +532,41 @@ const API_BASE_URL =
 const userInfo = ref<any>(null);
 const userPictureError = ref(false);
 const isBindingFacebook = ref(false);
+const showLoginModal = ref(false);
+
+// Alert Modal 狀態
+const alertModal = reactive({
+  show: false,
+  type: "info" as "success" | "error" | "info",
+  title: "",
+  message: "",
+});
+
+// 顯示 Alert
+function showAlert(
+  message: string,
+  type: "success" | "error" | "info" = "info",
+  title?: string
+) {
+  alertModal.message = message;
+  alertModal.type = type;
+  alertModal.title = title || "";
+  alertModal.show = true;
+}
+
+// 關閉Alert
+function closeAlert() {
+  alertModal.show = false;
+}
+
+// 監聽 showLoginModal 變化,重新渲染 Google 按鈕
+watch(showLoginModal, (newValue) => {
+  if (newValue) {
+    setTimeout(() => {
+      renderGoogleButton();
+    }, 100);
+  }
+});
 
 // 宣告 Facebook SDK
 declare global {
@@ -494,22 +614,13 @@ function initFacebookSDK() {
   document.body.appendChild(script);
 }
 
-window.onload = () => {
+onMounted(() => {
   // 初始化 Google SDK
   if (typeof google !== "undefined" && GOOGLE_CLIENT_ID) {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback: handleGoogleCredential,
     });
-
-    const buttonDiv = document.getElementById("google-login");
-    if (buttonDiv) {
-      google.accounts.id.renderButton(buttonDiv, {
-        theme: "filled_blue",
-        size: "medium",
-        type: "icon",
-      });
-    }
   } else {
     console.error("Google SDK 未載入或 Client ID 未設定");
   }
@@ -520,11 +631,32 @@ window.onload = () => {
   }
 
   // 檢查是否有已登入的 token
-  const savedToken = localStorage.getItem("auth_token");
+  const savedToken = Cookies.get("auth_token");
   if (savedToken) {
     verifyExistingToken(savedToken);
+  } else {
+    showLoginModal.value = true;
   }
-};
+
+  // 延遲渲染 Google 登入按鈕
+  setTimeout(() => {
+    renderGoogleButton();
+  }, 100);
+});
+
+// 渲染 Google 登入按鈕
+function renderGoogleButton() {
+  const buttonDiv = document.getElementById("google-login-modal");
+  if (buttonDiv && typeof google !== "undefined") {
+    google.accounts.id.renderButton(buttonDiv, {
+      theme: "filled_blue",
+      size: "large",
+      type: "standard",
+      text: "signin_with",
+      width: 300,
+    });
+  }
+}
 
 async function handleGoogleCredential(response: any) {
   const idToken = response.credential;
@@ -544,22 +676,29 @@ async function handleGoogleCredential(response: any) {
     if (data.success) {
       console.log("✅ 登入成功:", data.user);
 
-      // 儲存 JWT token
-      localStorage.setItem("auth_token", data.token);
+      // 儲存 JWT token 到 cookie (7天過期)
+      Cookies.set("auth_token", data.token, { expires: 7 });
       userInfo.value = data.user;
 
-      // 更新 UI 狀態（可以建立 user state）
-      alert(`歡迎，${data.user.name}！`);
-
-      // 重新整理或更新 UI
-      // location.reload();
+      // 檢查是否已綁定 Facebook
+      if (!data.user.facebookId) {
+        showLoginModal.value = false;
+        showAlert(
+          `歡迎,${data.user.name}!\n\n請先綁定 Facebook 帳號以使用地圖功能。`,
+          "info",
+          "歡迎"
+        );
+      } else {
+        showLoginModal.value = false;
+        showAlert(`歡迎回來,${data.user.name}!`, "success", "登入成功");
+      }
     } else {
       console.error("❌ 登入失敗:", data.error);
-      alert("登入失敗，請重試");
+      showAlert("登入失敗,請重試", "error");
     }
   } catch (error) {
     console.error("❌ 網路錯誤:", error);
-    alert("連線失敗，請檢查後端伺服器是否運行");
+    showAlert("連線失敗，請檢查後端伺服器是否運行", "error", "網路錯誤");
   }
 }
 
@@ -576,19 +715,23 @@ async function verifyExistingToken(token: string) {
     if (data.success) {
       userInfo.value = data.user;
       console.log("✅ Token 驗證成功，自動登入");
+      // 即使登入成功，如果沒有綁定 Facebook 也不顯示 modal
+      showLoginModal.value = false;
     } else {
-      localStorage.removeItem("auth_token");
+      Cookies.remove("auth_token");
+      showLoginModal.value = true;
     }
   } catch (error) {
     console.error("Token 驗證失敗:", error);
-    localStorage.removeItem("auth_token");
+    Cookies.remove("auth_token");
+    showLoginModal.value = true;
   }
 }
 
-// 綁定 Facebook
-function bindFacebook() {
+// Facebook 登入
+function loginWithFacebook() {
   if (!window.FB) {
-    alert("Facebook SDK 尚未載入，請稍後再試");
+    showAlert("Facebook SDK 尚未載入，請稍後再試", "error", "系統錯誤");
     return;
   }
 
@@ -598,33 +741,40 @@ function bindFacebook() {
     (response: any) => {
       if (response.authResponse) {
         const accessToken = response.authResponse.accessToken;
-        console.log("收到 Facebook token，準備綁定...");
+        console.log("收到 Facebook token，準備登入...");
 
-        // 使用 Promise 處理非同步操作
-        const token = localStorage.getItem("auth_token");
-        fetch(`${API_BASE_URL}/api/auth/bind-facebook`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ accessToken }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success) {
-              userInfo.value = data.user;
-              alert("✅ Facebook 綁定成功！");
-            } else {
-              alert(`❌ 綁定失敗: ${data.error}`);
-            }
-            isBindingFacebook.value = false;
-          })
-          .catch((error) => {
-            console.error("綁定失敗:", error);
-            alert("綁定過程中發生錯誤");
-            isBindingFacebook.value = false;
-          });
+        // 如果已有 Google 帳號，則綁定 Facebook
+        const token = Cookies.get("auth_token");
+        if (token) {
+          bindFacebookToAccount(accessToken);
+        } else {
+          // TODO: 實作純 Facebook 登入邏輯
+          showAlert("目前僅支援 Google 登入後綁定 Facebook", "info", "提示");
+          isBindingFacebook.value = false;
+        }
+      } else {
+        console.log("使用者取消 Facebook 登入");
+        isBindingFacebook.value = false;
+      }
+    },
+    { scope: "public_profile,email" }
+  );
+}
+
+// 綁定 Facebook
+function bindFacebook() {
+  if (!window.FB) {
+    showAlert("Facebook SDK 尚未載入，請稍後再試", "error", "系統錯誤");
+    return;
+  }
+
+  isBindingFacebook.value = true;
+
+  window.FB.login(
+    (response: any) => {
+      if (response.authResponse) {
+        const accessToken = response.authResponse.accessToken;
+        bindFacebookToAccount(accessToken);
       } else {
         console.log("使用者取消 Facebook 登入");
         isBindingFacebook.value = false;
@@ -634,13 +784,43 @@ function bindFacebook() {
   );
 }
 
+// 綁定 Facebook 到現有帳號
+function bindFacebookToAccount(accessToken: string) {
+  const token = Cookies.get("auth_token");
+
+  fetch(`${API_BASE_URL}/api/auth/bind-facebook`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ accessToken }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.success) {
+        userInfo.value = data.user;
+        showLoginModal.value = false;
+        showAlert("現在您可以使用地圖功能了。", "success", "Facebook 綁定成功");
+      } else {
+        showAlert(`綁定失敗: ${data.error}`, "error", "綁定失敗");
+      }
+      isBindingFacebook.value = false;
+    })
+    .catch((error) => {
+      console.error("綁定失敗:", error);
+      showAlert("綁定過程中發生錯誤", "error", "綁定錯誤");
+      isBindingFacebook.value = false;
+    });
+}
+
 // 登出
 function logout() {
-  localStorage.removeItem("auth_token");
+  Cookies.remove("auth_token");
   userInfo.value = null;
   userPictureError.value = false;
-  alert("已登出");
-  location.reload();
+  showLoginModal.value = true;
+  showAlert("您已成功登出", "success", "登出成功");
 }
 </script>
 
@@ -661,7 +841,6 @@ function logout() {
     background-color: #4b74a5;
     border-radius: 4px;
     border: 2px solid transparent;
-    background-clip: content-box;
   }
 }
 </style>
