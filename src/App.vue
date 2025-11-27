@@ -1,13 +1,13 @@
 <template>
   <div class="h-screen">
     <!-- Nav -->
-    <nav class="h-14 bg-gray-100 flex items-center px-4 shadow-sm border-b">
+    <nav class="flex h-14 items-center border-b bg-gray-100 px-4 shadow-sm">
       <h1 class="text-xl font-semibold text-gray-800">地圖示範</h1>
 
       <!-- 登入 -->
       <div class="ml-auto flex items-center space-x-4">
         <template v-if="isEmpty(userInfo)">
-          <span class="text-sm text-blue-500 font-semibold"> 登入： </span>
+          <span class="text-sm font-semibold text-blue-500"> 登入： </span>
           <div id="google-login"></div>
         </template>
 
@@ -18,7 +18,7 @@
               <span class="text-sm">HI！{{ userInfo.name }}</span>
               <div
                 v-if="userPictureError"
-                class="size-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold"
+                class="flex size-10 items-center justify-center rounded-full bg-blue-500 font-semibold text-white"
                 :title="userInfo.name"
               >
                 {{ getInitials(userInfo.name) }}
@@ -37,18 +37,18 @@
               v-if="!userInfo.facebookId"
               @click="bindFacebook"
               :disabled="isBindingFacebook"
-              class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {{ isBindingFacebook ? "綁定中..." : "綁定 Facebook" }}
             </button>
-            <span v-else class="text-xs text-green-600 font-medium">
+            <span v-else class="text-xs font-medium text-green-600">
               ✓ 已綁定 Facebook
             </span>
 
             <!-- 登出按鈕 -->
             <button
               @click="logout"
-              class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+              class="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800"
             >
               登出
             </button>
@@ -58,19 +58,21 @@
     </nav>
 
     <!-- Main -->
-    <main class="flex h-[calc(100%-56px)]">
+    <main class="flex h-[calc(100%-56px)] mobile:flex-col">
       <!-- Sidebar -->
-      <div class="w-[300px] h-full bg-gray-50 border-r overflow-y-auto">
+      <div
+        class="h-full w-[300px] mobile:h-1/2 border-r bg-gray-50 mobile:order-1 mobile:w-full"
+      >
         <div class="p-4">
-          <h2 class="text-lg font-semibold mb-4">搜尋地址</h2>
+          <h2 class="mb-4 text-lg font-semibold mobile:hidden">搜尋地址</h2>
 
-          <!-- 座標輸入 -->
+          <!-- 地址輸入 -->
           <div class="space-y-3">
             <div class="flex items-center space-x-2">
               <input
                 type="text"
                 placeholder="請輸入你要查詢的地址"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 v-model="searchInput"
               />
               <button @click="searchAddress">
@@ -80,22 +82,26 @@
           </div>
 
           <!-- 附近的都更案 -->
-          <div class="mt-6 pt-4 border-t">
-            <h3 class="font-medium text-gray-700 mb-2">地圖資訊</h3>
-            <ul class="custom-scrollbar max-h-[600px] pr-1 overflow-y-auto">
+          <div class="mt-6 mobile:mt-2 top:border-t tablet:pt-4">
+            <h3 class="mb-2 font-medium text-gray-700 mobile:hidden">
+              地圖資訊
+            </h3>
+            <ul
+              class="custom-scrollbar max-h-[600px] overflow-y-auto pr-1 mobile:max-h-[calc(50vh-120px)]"
+            >
               <template
                 v-for="(renewal, index) in filteredRenewals"
                 :key="renewal.id"
               >
                 <li
-                  class="mb-3 cursor-pointer font-semibold flex justify-between items-center px-2 py-4 bg-white border border-gray-200 rounded-md shadow-sm"
+                  class="mb-3 flex cursor-pointer items-center justify-between rounded-md border border-gray-200 bg-white px-2 py-4 font-semibold shadow-sm"
                   @click="getRenewalInfo(renewal)"
                 >
-                  <div class="text-gray-800 text-[18px]">
+                  <div class="text-[18px] text-gray-800">
                     {{ renewal.stop_name }}
                   </div>
 
-                  <div class="text-sm text-blue-400 space-x-1">
+                  <div class="space-x-1 text-sm text-blue-400">
                     <span class="text-[30px]">{{ renewal.distance }}</span>
                     <span>km</span>
                   </div>
@@ -107,7 +113,7 @@
       </div>
 
       <!-- Map Container -->
-      <div class="flex-1 h-full relative">
+      <div class="mobile:order-0 relative h-full w-full flex-1 mobile:h-1/2">
         <LeafletMap
           ref="mapComponent"
           :center="[mapCenter.lat, mapCenter.lng]"
@@ -121,7 +127,7 @@
           @click="getCurrentLocation"
           :disabled="isGettingLocation"
           :title="locationError || '取得當前位置'"
-          class="absolute bottom-6 right-6 size-10 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border-2 border-gray-200 hover:border-blue-500 z-[1000]"
+          class="absolute bottom-6 right-6 z-[1000] flex size-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-white shadow-lg transition-all hover:border-blue-500 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
         >
           <!-- 瞄準器圖標 -->
           <img src="./assets/locate_icon.svg" alt="Locate Icon" />
