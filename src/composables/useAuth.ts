@@ -67,12 +67,25 @@ export function useAuth(
   function renderGoogleButton() {
     const buttonDiv = document.getElementById("google-login-modal");
     if (buttonDiv && typeof google !== "undefined") {
-      google.accounts.id.renderButton(buttonDiv, {
-        theme: "filled_blue",
-        size: "large",
-        type: "standard",
-        text: "signin_with",
-        width: 300,
+      // 清空容器避免重複渲染
+      buttonDiv.innerHTML = "";
+
+      try {
+        google.accounts.id.renderButton(buttonDiv, {
+          theme: "filled_blue",
+          size: "large",
+          type: "standard",
+          text: "signin_with",
+          width: 300,
+        });
+        console.log("✅ Google 登入按鈕渲染成功");
+      } catch (error) {
+        console.error("❌ Google 按鈕渲染失敗:", error);
+      }
+    } else {
+      console.warn("⚠️ 無法渲染 Google 按鈕:", {
+        buttonDiv: !!buttonDiv,
+        googleSDK: typeof google !== "undefined",
       });
     }
   }
@@ -250,6 +263,11 @@ export function useAuth(
         callback: handleGoogleCredential,
       });
       console.log("✅ Google SDK 初始化完成");
+
+      // SDK 初始化完成後,嘗試渲染按鈕
+      setTimeout(() => {
+        renderGoogleButton();
+      }, 200);
     } else if (!GOOGLE_CLIENT_ID) {
       console.error("❌ Google Client ID 未設定");
     } else {
@@ -275,19 +293,16 @@ export function useAuth(
     } else {
       showLoginModal.value = true;
     }
-
-    // 延遲渲染 Google 登入按鈕
-    setTimeout(() => {
-      renderGoogleButton();
-    }, 100);
   }
 
+  // 延遲渲染 Google 登入按鈕
   // 監聽 showLoginModal 變化,重新渲染 Google 按鈕
   watch(showLoginModal, (newValue) => {
     if (newValue) {
-      setTimeout(() => {
-        renderGoogleButton();
-      }, 100);
+      // 多次嘗試渲染,確保成功
+      setTimeout(() => renderGoogleButton(), 100);
+      setTimeout(() => renderGoogleButton(), 300);
+      setTimeout(() => renderGoogleButton(), 500);
     }
   });
 
