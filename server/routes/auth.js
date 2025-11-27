@@ -66,6 +66,7 @@ router.post('/google-login', async (req, res) => {
         name: userData.name,
         picture: userData.picture,
         facebookId: userData.facebookId || null,
+        facebookPicture: userData.facebookPicture || null,
       },
       token: jwtToken
     });
@@ -101,6 +102,7 @@ router.get('/verify', authenticateToken, (req, res) => {
       name: userData.name,
       picture: userData.picture,
       facebookId: userData.facebookId || null,
+      facebookPicture: userData.facebookPicture || null,
     }
   });
 });
@@ -147,6 +149,7 @@ router.post('/bind-facebook', authenticateToken, async (req, res) => {
     const userData = users.get(userId);
     userData.facebookId = fbUser.facebookId;
     userData.facebookEmail = fbUser.email;
+    userData.facebookPicture = fbUser.picture; // 儲存 Facebook 頭像
     users.set(userId, userData);
 
     res.json({
@@ -158,6 +161,7 @@ router.post('/bind-facebook', authenticateToken, async (req, res) => {
         name: userData.name,
         picture: userData.picture,
         facebookId: userData.facebookId,
+        facebookPicture: userData.facebookPicture,
       }
     });
 

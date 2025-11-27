@@ -39,7 +39,7 @@
               :disabled="isBindingFacebook"
               class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ isBindingFacebook ? '綁定中...' : '綁定 Facebook' }}
+              {{ isBindingFacebook ? "綁定中..." : "綁定 Facebook" }}
             </button>
             <span v-else class="text-xs text-green-600 font-medium">
               ✓ 已綁定 Facebook
@@ -102,17 +102,6 @@
                 </li>
               </template>
             </ul>
-            <!-- <div class="text-sm text-gray-600 space-y-1">
-              <p>縮放等級: {{ mapZoom }}</p>
-              <p>
-                中心點: {{ mapCenter.lat.toFixed(4) }},
-                {{ mapCenter.lng.toFixed(4) }}
-              </p>
-              <p v-if="clickedLocation">
-                點擊位置: {{ clickedLocation.lat.toFixed(4) }},
-                {{ clickedLocation.lng.toFixed(4) }}
-              </p>
-            </div> -->
           </div>
         </div>
       </div>
@@ -121,7 +110,7 @@
       <div class="flex-1 h-full relative">
         <LeafletMap
           ref="mapComponent"
-          :center="[coordinates.lat, coordinates.lng]"
+          :center="[mapCenter.lat, mapCenter.lng]"
           :zoom="13"
           @map-ready="onMapReady"
           @click="onMapClick"
@@ -160,11 +149,6 @@ const isGettingLocation = ref(false);
 const locationError = ref<string | null>(null);
 const searchInput = ref("");
 
-const coordinates = reactive({
-  lat: 25.033,
-  lng: 121.5654,
-});
-
 const mapCenter = reactive({
   lat: 25.033,
   lng: 121.5654,
@@ -185,11 +169,20 @@ const setClickedLocation = (lat: number, lng: number) => {
 const onMapReady = (mapInstance: L.Map) => {
   map = mapInstance;
 
-  // 監聽地圖移動和縮放事件
-  map.on("moveend zoomend", () => {
+  // 監聽地圖移動事件
+  map.on("moveend", () => {
     if (map) {
       const center = map.getCenter();
       setMapCenter(center.lat, center.lng);
+
+      // 地圖移動時自動查詢附近資料
+      fetchNearbyRenewalsWithDebounce(center.lat, center.lng);
+    }
+  });
+
+  // 監聽地圖縮放事件 (只更新 zoom 值，不觸發查詢)
+  map.on("zoomend", () => {
+    if (map) {
       mapZoom.value = map.getZoom();
     }
   });
@@ -204,14 +197,18 @@ const onMapClick = (event: L.LeafletMouseEvent) => {
   fetchNearbyRenewals(event.latlng.lat, event.latlng.lng);
 };
 
-const goToLocation = () => {
-  if (mapComponent.value) {
-    mapComponent.value.flyTo(coordinates.lat, coordinates.lng, 15);
-  }
-};
-
 const getRenewalInfo = (renewal: NearbyRenewalResult) => {
   console.log("Selected renewal info:", renewal);
+
+  // 飛往該都更地點
+  if (mapComponent.value) {
+    mapComponent.value.flyTo(renewal.latitude, renewal.longitude, 16);
+
+    // 觸發 marker 跳動動畫
+    setTimeout(() => {
+      mapComponent.value.bounceMarker(renewal.latitude, renewal.longitude);
+    }, 500); // 等待飛行動畫完成後再跳動
+  }
 };
 
 // === 取得當前位置功能 ===
@@ -229,22 +226,39 @@ const getCurrentLocation = () => {
       const { latitude, longitude } = position.coords;
 
       // 更新座標
-      coordinates.lat = latitude;
-      coordinates.lng = longitude;
+      mapCenter.lat = latitude;
+      mapCenter.lng = longitude;
 
-      // 移除舊的標記
-      if (userLocationMarker && map) {
-        map.removeLayer(userLocationMarker);
+      // 移除舊的當前位置標記
+      if (mapComponent.value) {
+        mapComponent.value.clearMarkers("user");
       }
 
-      // 添加當前位置標記
+      // 添加當前位置標記（使用頭像或預設圖標）
       if (mapComponent.value) {
-        userLocationMarker = mapComponent.value.addMarker(latitude, longitude);
+        // 優先使用 Facebook 頭像，其次使用 Google 頭像
+        const avatarUrl =
+          userInfo.value?.facebookPicture || userInfo.value?.picture || "";
+        const userName = userInfo.value?.name || "您";
+
+        if (avatarUrl) {
+          userLocationMarker = mapComponent.value.addUserMarker({
+            lat: latitude,
+            lng: longitude,
+            avatarUrl,
+            name: userName,
+          });
+        } else {
+          userLocationMarker = mapComponent.value.addMarker(
+            latitude,
+            longitude
+          );
+        }
 
         if (userLocationMarker) {
           userLocationMarker
             .bindPopup(
-              `<b>您的位置</b><br>緯度: ${latitude.toFixed(
+              `<b>${userName}的位置</b><br>緯度: ${latitude.toFixed(
                 6
               )}<br>經度: ${longitude.toFixed(6)}`
             )
@@ -288,31 +302,73 @@ const getCurrentLocation = () => {
 
 // === 附近都更資料 ===
 const nearbyRenewals = ref<NearbyRenewalResult[]>([]);
-const setNearByRenewals = (data: NearbyRenewalResult[]) => {
+const nearbyRenewalsMap = ref<Map<string, NearbyRenewalResult>>(new Map());
+const renewalMarkersMap = ref<Map<string, L.Marker>>(new Map());
+
+const setNearbyRenewals = (data: NearbyRenewalResult[]) => {
   nearbyRenewals.value = data;
 };
 
 const fetchNearbyRenewals = async (lat: number, lng: number) => {
   const response = await useFetchNearbyRenewal(lat, lng);
   if (response?.result) {
-    setNearByRenewals(response.result);
+    // 使用 Map 追蹤資料,防止重複並更新距離
+    response.result.forEach((renewal) => {
+      const id = String(
+        renewal.id || `${renewal.latitude}_${renewal.longitude}`
+      );
+      nearbyRenewalsMap.value.set(id, renewal);
+    });
+
+    // 轉換為陣列並排序
+    const sortedRenewals = Array.from(nearbyRenewalsMap.value.values()).sort(
+      (a, b) => (a.distance || 0) - (b.distance || 0)
+    );
+
+    setNearbyRenewals(sortedRenewals);
   } else {
     nearbyRenewals.value = [];
   }
 };
 
+const updateRenewalsMarker = (renewals: NearbyRenewalResult[]) => {
+  if (!mapComponent.value) return;
+
+  // 建立新的 ID 集合
+  const newRenewalIds = new Set(
+    renewals.map((r) => String(r.id || `${r.latitude}_${r.longitude}`))
+  );
+
+  // 移除不再存在的 marker
+  renewalMarkersMap.value.forEach((marker, id) => {
+    if (!newRenewalIds.has(id)) {
+      mapComponent.value.getMap()?.removeLayer(marker);
+      renewalMarkersMap.value.delete(id);
+    }
+  });
+
+  // 添加新的或更新現有的 marker
+  renewals.forEach((renewal) => {
+    const id = String(renewal.id || `${renewal.latitude}_${renewal.longitude}`);
+
+    if (!renewalMarkersMap.value.has(id)) {
+      // 新增 marker
+      const marker = mapComponent.value.addMarker(
+        renewal.latitude,
+        renewal.longitude,
+        { title: renewal.stop_name }
+      );
+
+      if (marker) {
+        renewalMarkersMap.value.set(id, marker);
+      }
+    }
+  });
+};
+
 // 使用 debounce 包裝，避免地圖移動時頻繁呼叫 API
 const fetchNearbyRenewalsWithDebounce = debounce(fetchNearbyRenewals, 500);
 
-watch(
-  mapCenter,
-  (newCenter) => {
-    fetchNearbyRenewalsWithDebounce(newCenter.lat, newCenter.lng);
-  },
-  {
-    immediate: true,
-  }
-);
 // === 附近都更資料 end ===
 
 // === 取得都更案範圍多邊形 ===
@@ -347,19 +403,32 @@ const searchAddress = () => {
     return;
   }
 
-  filteredRenewals.value = nearbyRenewals.value.filter((renewal) =>
-    renewal.stop_name.includes(trimmedInput)
-  );
+  filteredRenewals.value = nearbyRenewals.value
+    .filter((renewal) => renewal.stop_name.includes(trimmedInput))
+    .sort((a, b) => a.distance - b.distance);
 };
 
 watch(
   nearbyRenewals,
   (newRenewals) => {
     // 當 nearbyRenewals 更新時，同步更新 filteredRenewals
-    filteredRenewals.value = useCloneDeep(newRenewals);
+    filteredRenewals.value = useCloneDeep(newRenewals).sort(
+      (a, b) => a.distance - b.distance
+    );
   },
   {
     immediate: true,
+  }
+);
+
+// 監聽 filteredRenewals 變動，更新地圖上的都更地點標記
+watch(
+  filteredRenewals,
+  (newFilteredRenewals) => {
+    updateRenewalsMarker(newFilteredRenewals);
+  },
+  {
+    deep: true,
   }
 );
 
@@ -396,26 +465,26 @@ const getInitials = (name: string): string => {
 // 初始化 Facebook SDK
 function initFacebookSDK() {
   // 動態載入 Facebook SDK
-  if (document.getElementById('facebook-jssdk')) {
+  if (document.getElementById("facebook-jssdk")) {
     return; // 已載入
   }
 
-  const script = document.createElement('script');
-  script.id = 'facebook-jssdk';
-  script.src = 'https://connect.facebook.net/zh_TW/sdk.js';
+  const script = document.createElement("script");
+  script.id = "facebook-jssdk";
+  script.src = "https://connect.facebook.net/zh_TW/sdk.js";
   script.async = true;
   script.defer = true;
-  
-  (window as any).fbAsyncInit = function() {
+
+  (window as any).fbAsyncInit = function () {
     window.FB.init({
       appId: FACEBOOK_APP_ID,
       cookie: true,
       xfbml: true,
-      version: 'v18.0'
+      version: "v18.0",
     });
-    console.log('✅ Facebook SDK 初始化完成');
+    console.log("✅ Facebook SDK 初始化完成");
   };
-  
+
   document.body.appendChild(script);
 }
 
