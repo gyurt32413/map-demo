@@ -12,25 +12,47 @@
         </template>
 
         <template v-else>
-          <div class="flex items-center space-x-1">
-            <span>HI！{{ userInfo.name }}</span>
-            <div
-              v-if="userPictureError"
-              class="size-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold"
-              :title="userInfo.name"
-            >
-              {{ getInitials(userInfo.name) }}
+          <div class="flex items-center space-x-3">
+            <!-- 使用者資訊 -->
+            <div class="flex items-center space-x-2">
+              <span class="text-sm">HI！{{ userInfo.name }}</span>
+              <div
+                v-if="userPictureError"
+                class="size-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold"
+                :title="userInfo.name"
+              >
+                {{ getInitials(userInfo.name) }}
+              </div>
+              <img
+                v-else
+                class="size-10 rounded-full"
+                :src="userInfo.picture"
+                alt="user-picture"
+                @error="userPictureError = true"
+              />
             </div>
-            <img
-              v-else
-              class="size-10 rounded-full"
-              :src="userInfo.picture"
-              alt="user-picture"
-              @error="userPictureError = true"
-            />
-          </div>
 
-          <button>登出</button>
+            <!-- 綁定 Facebook 按鈕 -->
+            <button
+              v-if="!userInfo.facebookId"
+              @click="bindFacebook"
+              :disabled="isBindingFacebook"
+              class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ isBindingFacebook ? '綁定中...' : '綁定 Facebook' }}
+            </button>
+            <span v-else class="text-xs text-green-600 font-medium">
+              ✓ 已綁定 Facebook
+            </span>
+
+            <!-- 登出按鈕 -->
+            <button
+              @click="logout"
+              class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+            >
+              登出
+            </button>
+          </div>
         </template>
       </div>
     </nav>
@@ -343,11 +365,21 @@ watch(
 
 // === 第三方登入 ===
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 const userInfo = ref<any>(null);
 const userPictureError = ref(false);
+const isBindingFacebook = ref(false);
+
+// 宣告 Facebook SDK
+declare global {
+  interface Window {
+    FB: any;
+    FB_APP_ID: string;
+  }
+}
 
 // 取得使用者姓名首字母
 const getInitials = (name: string): string => {
@@ -361,7 +393,34 @@ const getInitials = (name: string): string => {
   return parts[0]?.[0]?.toUpperCase() || "U";
 };
 
+// 初始化 Facebook SDK
+function initFacebookSDK() {
+  // 動態載入 Facebook SDK
+  if (document.getElementById('facebook-jssdk')) {
+    return; // 已載入
+  }
+
+  const script = document.createElement('script');
+  script.id = 'facebook-jssdk';
+  script.src = 'https://connect.facebook.net/zh_TW/sdk.js';
+  script.async = true;
+  script.defer = true;
+  
+  (window as any).fbAsyncInit = function() {
+    window.FB.init({
+      appId: FACEBOOK_APP_ID,
+      cookie: true,
+      xfbml: true,
+      version: 'v18.0'
+    });
+    console.log('✅ Facebook SDK 初始化完成');
+  };
+  
+  document.body.appendChild(script);
+}
+
 window.onload = () => {
+  // 初始化 Google SDK
   if (typeof google !== "undefined" && GOOGLE_CLIENT_ID) {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
@@ -378,6 +437,17 @@ window.onload = () => {
     }
   } else {
     console.error("Google SDK 未載入或 Client ID 未設定");
+  }
+
+  // 初始化 Facebook SDK
+  if (FACEBOOK_APP_ID) {
+    initFacebookSDK();
+  }
+
+  // 檢查是否有已登入的 token
+  const savedToken = localStorage.getItem("auth_token");
+  if (savedToken) {
+    verifyExistingToken(savedToken);
   }
 };
 
@@ -416,6 +486,86 @@ async function handleGoogleCredential(response: any) {
     console.error("❌ 網路錯誤:", error);
     alert("連線失敗，請檢查後端伺服器是否運行");
   }
+}
+
+// 驗證現有 token
+async function verifyExistingToken(token: string) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      userInfo.value = data.user;
+      console.log("✅ Token 驗證成功，自動登入");
+    } else {
+      localStorage.removeItem("auth_token");
+    }
+  } catch (error) {
+    console.error("Token 驗證失敗:", error);
+    localStorage.removeItem("auth_token");
+  }
+}
+
+// 綁定 Facebook
+function bindFacebook() {
+  if (!window.FB) {
+    alert("Facebook SDK 尚未載入，請稍後再試");
+    return;
+  }
+
+  isBindingFacebook.value = true;
+
+  window.FB.login(
+    (response: any) => {
+      if (response.authResponse) {
+        const accessToken = response.authResponse.accessToken;
+        console.log("收到 Facebook token，準備綁定...");
+
+        // 使用 Promise 處理非同步操作
+        const token = localStorage.getItem("auth_token");
+        fetch(`${API_BASE_URL}/api/auth/bind-facebook`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ accessToken }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              userInfo.value = data.user;
+              alert("✅ Facebook 綁定成功！");
+            } else {
+              alert(`❌ 綁定失敗: ${data.error}`);
+            }
+            isBindingFacebook.value = false;
+          })
+          .catch((error) => {
+            console.error("綁定失敗:", error);
+            alert("綁定過程中發生錯誤");
+            isBindingFacebook.value = false;
+          });
+      } else {
+        console.log("使用者取消 Facebook 登入");
+        isBindingFacebook.value = false;
+      }
+    },
+    { scope: "public_profile" }
+  );
+}
+
+// 登出
+function logout() {
+  localStorage.removeItem("auth_token");
+  userInfo.value = null;
+  userPictureError.value = false;
+  alert("已登出");
+  location.reload();
 }
 </script>
 

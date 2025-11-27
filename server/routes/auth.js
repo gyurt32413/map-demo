@@ -1,8 +1,12 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { verifyGoogleToken } from '../services/googleAuth.js';
+import { verifyFacebookToken } from '../services/facebookAuth.js';
 
 const router = express.Router();
+
+// 簡易記憶體儲存（生產環境應使用資料庫）
+const users = new Map();
 
 /**
  * POST /api/auth/google-login
@@ -31,8 +35,17 @@ router.post('/google-login', async (req, res) => {
 
     const { user } = result;
 
-    // 在這裡可以將使用者資訊存入資料庫
-    // await saveUserToDatabase(user);
+    // 儲存或更新使用者資訊
+    let userData = users.get(user.googleId) || {};
+    userData = {
+      ...userData,
+      googleId: user.googleId,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      emailVerified: user.emailVerified,
+    };
+    users.set(user.googleId, userData);
 
     // 產生自己的 JWT token
     const jwtToken = jwt.sign(
@@ -48,9 +61,11 @@ router.post('/google-login', async (req, res) => {
     res.json({
       success: true,
       user: {
-        email: user.email,
-        name: user.name,
-        picture: user.picture
+        googleId: userData.googleId,
+        email: userData.email,
+        name: userData.name,
+        picture: userData.picture,
+        facebookId: userData.facebookId || null,
       },
       token: jwtToken
     });
@@ -66,13 +81,93 @@ router.post('/google-login', async (req, res) => {
 
 /**
  * GET /api/auth/verify
- * 驗證 JWT token
+ * 驗證 JWT token 並返回完整使用者資訊
  */
 router.get('/verify', authenticateToken, (req, res) => {
+  const userData = users.get(req.user.userId);
+  
+  if (!userData) {
+    return res.status(404).json({ 
+      success: false, 
+      error: '使用者不存在' 
+    });
+  }
+
   res.json({ 
     success: true, 
-    user: req.user 
+    user: {
+      googleId: userData.googleId,
+      email: userData.email,
+      name: userData.name,
+      picture: userData.picture,
+      facebookId: userData.facebookId || null,
+    }
   });
+});
+
+/**
+ * POST /api/auth/bind-facebook
+ * 綁定 Facebook 帳號
+ */
+router.post('/bind-facebook', authenticateToken, async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    
+    if (!accessToken) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '缺少 Facebook token' 
+      });
+    }
+
+    // 驗證 Facebook token
+    const result = await verifyFacebookToken(accessToken);
+    
+    if (!result.success) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Facebook token 驗證失敗' 
+      });
+    }
+
+    const { user: fbUser } = result;
+    const userId = req.user.userId;
+    
+    // 檢查該 Facebook ID 是否已被其他帳號綁定
+    for (const [id, data] of users.entries()) {
+      if (data.facebookId === fbUser.facebookId && id !== userId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: '此 Facebook 帳號已被其他 Google 帳號綁定' 
+        });
+      }
+    }
+
+    // 更新使用者資訊
+    const userData = users.get(userId);
+    userData.facebookId = fbUser.facebookId;
+    userData.facebookEmail = fbUser.email;
+    users.set(userId, userData);
+
+    res.json({
+      success: true,
+      message: 'Facebook 綁定成功',
+      user: {
+        googleId: userData.googleId,
+        email: userData.email,
+        name: userData.name,
+        picture: userData.picture,
+        facebookId: userData.facebookId,
+      }
+    });
+
+  } catch (error) {
+    console.error('綁定 Facebook 錯誤:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: '伺服器錯誤' 
+    });
+  }
 });
 
 /**

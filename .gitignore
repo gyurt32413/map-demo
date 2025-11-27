@@ -12,6 +12,10 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# SSL 憑證
+cert/
+*.pem
+
 # 依賴
 node_modules
 
