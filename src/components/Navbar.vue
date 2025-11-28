@@ -26,17 +26,19 @@
           </div>
 
           <!-- 綁定 Facebook 按鈕 -->
-          <button
-            v-if="!userInfo.facebookId"
-            @click="$emit('bind-facebook')"
-            :disabled="isBindingFacebook"
-            class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {{ isBindingFacebook ? "綁定中..." : "綁定 Facebook" }}
-          </button>
-          <span v-else class="text-xs font-medium text-green-600">
-            ✓ 已綁定 Facebook
-          </span>
+          <template v-if="requiresFacebookBinding">
+            <button
+              v-if="!userInfo.facebookId"
+              @click="$emit('bind-facebook')"
+              :disabled="isBindingFacebook"
+              class="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {{ isBindingFacebook ? "綁定中..." : "綁定 Facebook" }}
+            </button>
+            <span v-else class="text-xs font-medium text-green-600">
+              ✓ 已綁定 Facebook
+            </span>
+          </template>
 
           <!-- 登出按鈕 -->
           <button
@@ -67,6 +69,7 @@ interface Props {
   userPictureError: boolean;
   isBindingFacebook: boolean;
   getInitials: (name: string) => string;
+  requiresFacebookBinding: boolean;
 }
 
 defineProps<Props>();

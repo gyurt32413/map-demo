@@ -5,6 +5,14 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const rawRequireFacebookBinding = import.meta.env
+  .VITE_REQUIRE_FACEBOOK_BINDING;
+const requiresFacebookBinding =
+  rawRequireFacebookBinding === undefined
+    ? true
+    : !["false", "0", "no", "off"].includes(
+        String(rawRequireFacebookBinding).trim().toLowerCase()
+      );
 
 // 宣告 Facebook SDK
 declare global {
@@ -112,7 +120,7 @@ export function useAuth(
         Cookies.set("auth_token", data.token, { expires: 7 });
         userInfo.value = data.user;
 
-        if (!data.user.facebookId) {
+        if (!data.user.facebookId && requiresFacebookBinding) {
           showLoginModal.value = false;
           showAlert(
             `歡迎,${data.user.name}!\n\n請先綁定 Facebook 帳號以使用地圖功能。`,
@@ -312,6 +320,7 @@ export function useAuth(
     userPictureError,
     isBindingFacebook,
     showLoginModal,
+    requiresFacebookBinding,
 
     // Methods
     getInitials,

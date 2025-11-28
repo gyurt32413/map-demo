@@ -17,6 +17,7 @@
       :user-info="userInfo"
       :user-picture-error="userPictureError"
       :is-binding-facebook="isBindingFacebook"
+      :requires-facebook-binding="requiresFacebookBinding"
       :get-initials="getInitials"
       @bind-facebook="bindFacebook"
       @logout="logout"
@@ -25,7 +26,10 @@
 
     <!-- Main -->
     <main
-      v-if="!isEmpty(userInfo) && userInfo.facebookId"
+      v-if="
+        !isEmpty(userInfo) &&
+        (!requiresFacebookBinding || userInfo.facebookId)
+      "
       class="flex h-[calc(100%-56px)] mobile:flex-col"
     >
       <!-- Sidebar -->
@@ -61,7 +65,11 @@
 
     <!-- 未綁定 Facebook 時的提示 -->
     <div
-      v-else-if="!isEmpty(userInfo) && !userInfo.facebookId"
+      v-else-if="
+        !isEmpty(userInfo) &&
+        requiresFacebookBinding &&
+        !userInfo.facebookId
+      "
       class="flex h-[calc(100%-56px)] items-center justify-center bg-gray-50"
     >
       <div class="max-w-md text-center">
@@ -171,6 +179,7 @@ const {
   bindFacebook,
   logout,
   initAuth,
+  requiresFacebookBinding,
 } = useAuth(showAlert);
 
 // 使用 Map Composable
